@@ -57,7 +57,15 @@ FLUSH PRIVILEGES;
 
 The repository already comes with a production-ready `ecosystem.config.cjs` that defines both `YIELD-MAXI-API` and `YIELD-MAXI-CRON` processes. It automatically loads variables from your `.env` file.
 
-### 5. Build and Start
+### 5. Playwright Browsers (Required for Vaults)
+
+Since we use Playwright for scraping Cloudflare-protected vault data, you must install the browser binaries and their system dependencies on the server:
+
+```bash
+pnpm setup:browsers
+```
+
+### 6. Build and Start
 
 ```bash
 pnpm build
