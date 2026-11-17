@@ -1,124 +1,49 @@
-# CryptoYieldMaxi
+# Crypto Yield Maxi Docs
 
-A comprehensive crypto yield aggregation platform that helps users discover:
-- **Lending opportunities** across DeFi protocols
-- **Delta-neutral vaults** for low-risk yield
-- **Funding arbitrage** between exchanges
-- **Airdrop opportunities** from exchanges
+This folder keeps the durable project documentation for the current app in this repository.
 
-## Architecture Overview
+## Core Docs
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         FRONTEND                                 │
-│  Next.js App Router + Tailwind CSS                              │
-│  Pages: Home, Lending, Vaults, Arbitrage, Airdrop               │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │ REST API
-┌──────────────────────────▼──────────────────────────────────────┐
-│                         BACKEND                                  │
-│  Express + TypeScript + Sequelize                               │
-│                                                                  │
-│  ┌────────────┐  ┌────────────┐  ┌────────────┐                │
-│  │   Cron     │  │  Services  │  │   Routes   │                │
-│  │  Scheduler │→ │  (Sync)    │→ │   (API)    │                │
-│  └────────────┘  └────────────┘  └────────────┘                │
-│         │                                                        │
-│  ┌──────▼───────────────────────────────────────┐               │
-│  │              Exchange Clients                 │               │
-│  │  Hyperliquid, Lighter, Binance, OKX, ...     │               │
-│  └───────────────────────────────────────────────┘               │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │
-┌──────────────────────────▼──────────────────────────────────────┐
-│                         DATABASE                                 │
-│  MySQL + Sequelize ORM                                          │
-│  Tables: lending_pools, vaults, arbitrage_opportunities, etc.   │
-└─────────────────────────────────────────────────────────────────┘
-```
+- [architecture.md](architecture.md): backend/frontend structure, data flow, active cron jobs, tables
+- [api.md](api.md): current public API surface and response shapes
+- [deployment.md](deployment.md): production deployment notes, env vars, migrations
+- [frontend-pages.md](frontend-pages.md): current routes and important UX behavior
+- [exchanges.md](exchanges.md): active exchange coverage and curated guide lists
+- [exchange-symbol-mapping.md](exchange-symbol-mapping.md): symbol canonicalization and cross-venue matching
+- [filters.md](filters.md): centralized and environment-driven filtering thresholds
+- [state-machines.md](state-machines.md): sync, cache, retention and recovery flows
+- [STRING_UTILS.md](STRING_UTILS.md): string normalization helper behavior
 
-## Quick Start
+## Current Product Shape
 
-### Prerequisites
-- Node.js 20+
-- MySQL 8+
-- pnpm
+The app currently ships these major surfaces:
 
-### Backend Setup
-```bash
-cd backend
-pnpm install
-cp .env.example .env  # Configure database
-pnpm dev:api          # Start API server (port 1000)
-pnpm dev:cron         # Start cron scheduler
-```
+- `/`: landing page with product overview and a static `380+` exchange stat
+- `/delta-neutral`: funding extraction opportunities, same-exchange and cross-exchange modes
+- `/arbitrage`: two-leg scanner (Price / Funding modes) with server-side filter/sort/pagination
+- `/lending`: lending pools grouped by asset
+- `/vaults`: vault opportunities with notice modal and APR history chart
+- `/airdrop`: curated airdrop opportunities from the database
+- `/guide`: educational guide + curated exchange directory
+- `/about`: project/about/support page
+- `/trending`: placeholder screen
+- `/health`: frontend route handler returning the deployed component and release SHA (not a UI page)
 
-### Frontend Setup
-```bash
-cd frontend
-pnpm install
-pnpm dev              # Start Next.js (port 1001)
-```
+## Active Sync Jobs
 
-## Environment Variables
+The cron worker (`backend/src/cron/index.ts`) runs:
 
-### Backend
-```env
-NODE_ENV=development
-PORT=1000
-DB_HOST=localhost
-DB_PORT=3306
-DB_NAME=crypto_yield_maxi
-DB_USER=root
-DB_PASSWORD=
-```
+- Arbitrage scanner every 5 minutes
+- Delta-neutral funding extraction every hour at `:03`
+- Lending pools every hour at `:07`
+- Vaults every hour at `:09`
+- Hourly history snapshot guards at `:12` and `:42`
+- Telegram reports at `:10` (top opportunities) and `:15` (hourly summary)
+- Daily backup at `02:30 UTC`, retention cleanup at `03:30 UTC`, history self-heal at `04:45 UTC`
 
-### Frontend
-```env
-NEXT_PUBLIC_API_BASE_URL=http://localhost:1000
-```
+There is no exchange-directory cron. `/api/exchanges` is built from the live client registry, while the guide page uses curated frontend data plus `ref_links` overrides.
 
-## Documentation
+## Notes
 
-- [Architecture](./architecture.md) - System design and data flow
-- [Filters](./filters.md) - TVL/APY thresholds and blacklists
-- [Exchanges](./exchanges.md) - Integrated exchanges (22+)
-- [API Reference](./api.md) - REST API endpoints
-- [Frontend Pages](./frontend-pages.md) - Page routes and features
-- [Deployment](./deployment.md) - PM2, cluster mode, production setup
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|------------|
-| Frontend | Next.js 15, React 19, Tailwind CSS, shadcn/ui |
-| Backend | Express, TypeScript, Sequelize, Helmet |
-| Database | MySQL 8, Redis |
-| Cron | node-cron, in-memory sync reporting |
-| HTTP | Axios with retry |
-
-## Project Structure
-
-```
-/
-├── backend/
-│   └── src/
-│       ├── config/      # Database, filters
-│       ├── exchanges/   # 22 exchange clients
-│       ├── models/      # Sequelize models
-│       ├── routes/      # API endpoints
-│       ├── services/    # Business logic
-│       ├── cron/        # Scheduled jobs
-│       └── scripts/     # Manual sync scripts
-├── frontend/
-│   └── app/
-│   │   ├── lending/     # Lending pools page
-│   │   ├── vaults/      # Delta-neutral vaults
-│   │   ├── arbitrage/   # Funding arbitrage
-│   │   └── airdrop/     # Airdrop opportunities
-└── docs/                # This documentation
-```
-
-## License
-
-MIT
+- Temporary audit reports and one-off checklists are intentionally not kept here once the resulting fixes are merged.
+- Backend-only operational notes may also live under `backend/docs/`; frontend deployment/CI notes live under `frontend/docs/`.

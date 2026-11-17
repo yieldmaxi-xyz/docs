@@ -1,94 +1,188 @@
-# Integrated Exchanges
+# Exchanges and Protocol Coverage
 
-CryptoYieldMaxi aggregates data from 22+ exchanges.
+The backend exchange registry lives in `backend/src/exchanges/index.ts`. `/api/exchanges` is the live source of truth for venue metadata (name, abbreviation, type, native funding period, spot availability, delta-neutral support).
 
-## Centralized Exchanges (CEX)
+`BLACKLIST_EXCHANGES` defaults to `MEXC,HTX`. Blacklisted venues are removed from ingestion and every API surface.
 
-| Exchange | Funding Interval | Features |
-|----------|------------------|----------|
-| Binance | 8h | Largest volume |
-| Bybit | 8h | Popular perps |
-| OKX | 8h | Deep liquidity |
-| Bitget | 8h | Copy trading |
-| Gate.io | 8h | Wide selection |
-| MEXC | 8h | New listings |
-| KuCoin | 8h | Established |
-| HTX | 8h | Asian market |
-| Bitfinex | 8h | Pro traders |
+## Delta-Neutral Sources
 
-## Decentralized Exchanges (DEX)
+Same-exchange spot + short-perp sync uses the curated list in `backend/src/config/deltaExchanges.ts`:
 
-### Perp DEXs
+- Hyperliquid
+- Lighter
+- Aster
+- Binance
+- OKX
+- Bitfinex
+- Bybit
+- Bitget
+- Gate.io
+- MEXC
+- KuCoin
+- HTX
 
-| Exchange | Chain | Funding Interval | Notes |
-|----------|-------|------------------|-------|
-| **Hyperliquid** | Hyperliquid L1 | 1h | Top DEX by volume |
-| **Lighter** | Arbitrum | 1h | Order book DEX |
-| **Aster** | Arbitrum | 8h | Perpetual DEX |
-| **Variational** | Arbitrum | 8h | AMM-based |
-| **Extended** | Extended L2 | 1h | Leveraged trading |
-| **GRVT** | zkSync | 8h | Hybrid DEX |
-| **Ostium** | Arbitrum | 8h | RWA perps |
-| **Paradex** | StarkEx | 8h | StarkWare based |
-| **EdgeX** | EdgeL2 | 1h | Low fees |
-| **Pacifica** | Solana | 8h | Solana perps |
-| **Reya** | Arbitrum | 8h | Modular DEX |
+With the default blacklist, 10 of these are active.
 
-## Funding Rate Intervals
+### Cross-Exchange Perp-Only Short Legs
 
-### 1-Hour Funding
+`DEFAULT_CROSS_PERP_ONLY_EXCHANGE_NAMES` adds these curated perp-only venues:
+
+- dYdX
+- Extended
+- EdgeX
+- Paradex
+- ApeX
+- Avantis
+- GMX
+- Nado
+- Ostium
+- Reya
+- Pacifica
+- Variational
+- RiseX
+- Grvt
+- Aftermath
+- Trade.xyz
+
+Override with `DELTA_CROSS_PERP_EXCHANGES` (comma-separated). Set it to an empty value to disable all perp-only venues.
+
+## Arbitrage Scanner Sources
+
+The registry contains **54 venues**; with the default blacklist **52 are active**. `hasSpot=true` marks venues that expose spot markets for delta-neutral metadata.
+
+**Established venues (29):**
+
 - Hyperliquid
 - Lighter
 - Extended
+- Pacifica
+- Reya
+- Variational
+- Aster
+- Grvt
+- Paradex
+- EdgeX
+- Binance
+- OKX
+- Bitfinex
+- Bybit
+- Bitget
+- Gate.io
+- MEXC
+- KuCoin
+- HTX
+- Ostium
+- RiseX
+- dYdX
+- BingX
+- Backpack
+- GMX
+- Avantis
+- Nado
+- ApeX
+- Aftermath
+
+**Emerging / prediction venues (25):**
+
+- Gains Network
+- StandX
+- Trade.xyz
+- Decibel
+- Hibachi
+- Katana
+- TxFlow
+- 01 Exchange
+- Vest Exchange
+- Arcus
+- Bulk
+- Bullet
+- Entropy
+- Hello Trade
+- Hotstuff
+- Kalshi
+- KM
+- Lighter RH
+- Ondo Finance
+- Paper Trade
+- Perpl
+- Phoenix
+- Polymarket
+- Popdex
+- QFEX
+
+Spot-enabled venues: Binance, OKX, Hyperliquid, Lighter, Aster, Bitfinex, Bybit, Bitget, Gate.io, MEXC, KuCoin, HTX, BingX, Backpack. MEXC and HTX are blacklisted by default, so they do not appear in `/api/exchanges`.
+
+## Vault Fetchers
+
+Registered in `backend/src/services/VaultSyncService.ts` (14 fetchers):
+
+- Hyperliquid
+- Jupiter
+- Paradex
+- Extended
+- Lighter
+- GRVT
+- Reya
+- Ostium
+- Bluefin
+- KiloEx
+- DefiLlama
+- RiseX
+- ApeX
 - EdgeX
 
-### 8-Hour Funding
-- All CEXs (Binance, Bybit, etc.)
-- Variational (4 periods × 8h = normalized to hourly)
-- Aster, GRVT, Ostium, Paradex
+DefiLlama also supplies general vault data and APR history for `DL-*` vault IDs.
 
-## Exchange Features
+## RWA Registry
 
-### Vaults Available
-| Exchange | Vault Type |
-|----------|-----------|
-| Hyperliquid | HLP (Liquidity Provider) |
-| Jupiter | JLP |
-| GRVT | Market Making |
-| Ostium | USDT Vault |
-| Bluefin | UDL Vaults |
-| KiloEx | USDC/USDT Vaults |
+`rwa_assets` is a shared, symbol-keyed registry used to classify tokenized stocks, commodities, indices and FX across venues.
 
-### Lending Integration
-| Protocol | Source |
-|----------|--------|
-| Aave V3 | DefiLlama |
-| Compound | DefiLlama |
-| Pendle | DefiLlama |
-| Hyperlend | DefiLlama |
-| Venus | DefiLlama |
-| Kamino | DefiLlama |
+- Seeded by `pnpm migrate:rwa-assets` from `backend/src/config/rwaSymbols.ts`
+- Learned from venue metadata by `pnpm rwa:sync`
+- Curated with `pnpm rwa:add` / `pnpm rwa:remove`
+- Runtime cache TTL: 5 minutes
 
-## Adding New Exchange
+## Curated Guide Exchange List
 
-1. Create client in `backend/src/exchanges/newexchange.ts`
-2. Implement `ExchangeClient` interface:
-   ```typescript
-   interface ExchangeClient {
-     name: string;
-     type: 'cex' | 'perp_dex' | 'spot_dex';
-     getFundingRates(symbols: string[]): Promise<FundingSnapshot[]>;
-   }
-   ```
-3. Register in `backend/src/exchanges/index.ts`
-4. Add to sync services as needed
+The guide page does not depend on exchange cron data. It uses the curated frontend source of truth in `frontend/lib/exchanges.ts`, ordered by `rank`.
 
-## API Base URLs
+### CEX order (11)
 
-| Exchange | API Base URL |
-|----------|--------------|
-| Hyperliquid | https://api.hyperliquid.xyz |
-| Lighter | https://api.lighter.xyz |
-| Binance | https://fapi.binance.com |
-| OKX | https://www.okx.com |
-| Variational | https://api.variational.io |
+1. Binance
+2. OKX
+3. Bybit
+4. Coinbase
+5. KuCoin
+6. Gate
+7. Bitget
+8. MEXC
+9. HTX
+10. Bitfinex
+11. Kraken
+
+### Perp order (13)
+
+1. Hyperliquid
+2. Aster
+3. Lighter
+4. edgeX
+5. Variational
+6. GMX
+7. Drift Trade
+8. Extended
+9. Derive
+10. Grvt
+11. Nado
+12. Avantis
+13. RiseX
+
+Referral links on `/guide` are resolved as:
+
+1. `ref_links` override from DB by slug
+2. curated default link
+
+## Notes
+
+- Exchange metadata sync is not a cron job; `/api/exchanges` is derived from the live registry and cached for 12 hours.
+- Homepage exchange count is still served by `/api/home/total-exchanges`, but the homepage renders a static `380+` stat.
+- Guide visuals, copy and ordering should be updated in frontend curated data, not through backend cron jobs.

@@ -1,164 +1,159 @@
-# Application State Machines & Diagrams
+# Application Flows
 
-Tài liệu này mô tả vòng đời (lifecycle) và các trạng thái (states) của các luồng dữ liệu, tiến trình nền (cron jobs), và kiến trúc caching trong hệ thống **Crypto Yield Maxi**.
+This document summarizes the current sync, recovery and cache flows.
 
----
+## 1. Delta-Neutral Sync Flow (hourly at `:03`)
 
-## 1. Sync Flow (Luồng đồng bộ)
+```mermaid
+flowchart TD
+    A[Cron :03] --> B[Fetch non-blacklisted delta venue data]
+    B --> C[Write current 8h rows]
+    C --> D[Snapshot funding_extractor_history for the hour]
+    D --> E[Fast aggregation: 24h / 7d / 30d]
+    E --> F[Cross summary fast aggregation]
+    D --> G[Slow aggregation: 90d / 180d, at most every 6h]
+    G --> H[Cross summary slow aggregation]
+    F --> I[Invalidate delta cache prefixes]
+    H --> I
+```
 
-Luồng này chịu trách nhiệm thu thập, tính toán và lưu trữ các cơ hội giao dịch (Delta Neutral, Arbitrage) từ hơn 20 sàn giao dịch. Nó được kích hoạt liên tục thông qua Cron Job.
+Notes:
+
+- Fast and slow aggregations run independently, so a slow 90d/180d rebuild does not block the hourly 24h/7d/30d refresh.
+- Each period is bounded by a stall/freshness window; stale rows are not served by the API.
+- Current 8h rows are live venue data; aggregated periods are computed from hourly history with coverage checks.
+- Cross same-asset routes are snapshotted during the sync and aggregated into `delta_cross_period_summaries`.
+
+## 2. Arbitrage Scanner Flow (every 5 minutes)
 
 ```mermaid
 stateDiagram-v2
-    [*] --> T1_Triggered : Cron trigger (Mỗi 1 giờ)
-    
-    state "Tiến trình đồng bộ Real-Time" as SyncProcess {
-        T1_Triggered --> Fetching_Delta : Gọi syncDeltaNeutral()
-        
-        state "Delta-Neutral Sync" as DeltaSync {
-            Fetching_Delta --> Fetch_Exchanges : Query 20+ APIs song song
-            Fetch_Exchanges --> Calculating_APR : Xử lý dữ liệu (Fees, Spread, Rate)
-            Calculating_APR --> Filtering_Liquidity : Lọc Volume & OI (Spot+Perp)
-            Filtering_Liquidity --> Save_Delta_DB : Lưu bảng funding_extractor
-            Save_Delta_DB --> Snapshot_History : Lấy snapshot bảng history
-        }
-        
-        Snapshot_History --> Fetching_Arbitrage : Gọi syncArbitrage()
-        
-        state "Arbitrage Sync" as ArbSync {
-            Fetching_Arbitrage --> Load_History : Kéo bulk DB History (N+1 fixed)
-            Load_History --> Find_Pairs : Tìm cặp sàn Long/Short tốt nhất
-            Find_Pairs --> Filter_Arbitrage : Tính Spread, APR & Risk
-            Filter_Arbitrage --> Save_Arb_DB : Lưu bảng arbitrage_opportunities
-        }
-        
-    }
-    
-    Save_Arb_DB --> Idle : Hoàn tất chu kỳ
-    Idle --> [*]
+    [*] --> LockCheck
+    LockCheck --> Skipped : another process holds the lock
+    LockCheck --> Fetching : lock acquired
+    Fetching --> Canonicalizing
+    Canonicalizing --> Pairing
+    Pairing --> ClassifyingRWA
+    ClassifyingRWA --> Publishing
+    Publishing --> WarmingQueries
+    WarmingQueries --> [*]
+    Skipped --> [*]
 ```
 
-**Chi tiết luồng:**
-1. Khởi động từ `cron/index.ts`.
-2. **Delta Neutral** xử lý cập nhật dữ liệu Funding chung.
-3. **Snapshot History** chạy ngay trong `syncDeltaNeutral()` để đảm bảo DB luôn lưu lại phiên cập nhật mới nhất.
-4. **Arbitrage** tính toán mức chênh lệch giữa các cặp sàn.
+Notes:
 
----
+- The worker and API processes share a Redis lock; only one full scan runs at a time.
+- All non-blacklisted clients are fetched with per-venue timeouts.
+- Symbols are canonicalized and contract-size variants (PEPE / 1000PEPE / 10000SATS) are grouped under one base ticker.
+- Asset class is resolved from venue metadata + the shared `rwa_assets` registry.
+- The scanner records hourly 1h-rate buckets in `funding_rate_snapshots`, then rebuilds 24h/7d sums used by the realized funding metrics.
+- The cycle snapshot is written to Redis and adopted by API workers into RAM.
+- API workers use stale-while-revalidate: requests get the current RAM snapshot while a newer Redis cycle is parsed in the background.
+- Common page-1 query variants are warmed after each sync.
+- If the scanner has not produced fresh data for 15 minutes, the staleness monitor sends a Telegram alert; it sends a recovery alert when data resumes.
 
-## 2. External Data Sync Flow (Luồng đồng bộ từ bên thứ 3)
-
-Luồng này phục vụ cho các mảng DeFi tĩnh hoặc ít thay đổi (Lending, Vaults, Listings sàn), chạy với chu kỳ dài hơn (Hàng giờ hoặc Hàng ngày).
+## 3. Hourly History Safety Nets
 
 ```mermaid
-stateDiagram-v2
-    [*] --> Scheduled_Trigger : Cron trigger (1H, 24H)
-    
-    Scheduled_Trigger --> API_Request : Gọi API bên thứ 3 (VD: DefiLlama)
-    
-    state API_Request {
-        [*] --> Rate_Limiter_Wait : Đợi tránh limit
-        Rate_Limiter_Wait --> FetchData
-        
-        FetchData --> Retry_Loop : Lỗi Timeout/5xx
-        Retry_Loop --> FetchData : Exponential Backoff
-        
-        FetchData --> Parsing_Data : Thành công HTTP 200
-    }
-    
-    Parsing_Data --> Format_Transform : Ánh xạ sang schema nội bộ
-    Format_Transform --> Database_Upsert : ON DUPLICATE KEY UPDATE (xóa cũ/thêm mới)
-    
-    Database_Upsert --> Clear_Cache : Xóa Memory/Redis liên quan
-    Clear_Cache --> [*] : Hoàn tất cập nhật
+flowchart TD
+    A[Delta sync :03] --> B[Snapshot current hour]
+    C[Snapshot guard :12] --> D{Current hour slot complete?}
+    E[Snapshot guard :42] --> D
+    D -->|no| F[Insert missing/partial rows]
+    D -->|yes| G[No-op]
+    H[Daily 04:45 self-heal] --> I[Repair last 48h from venue APIs]
 ```
 
-**Các chu kỳ:**
-* **Delta Neutral Sync:** Kích hoạt tại phút thứ 1 mỗi giờ.
-* **Arbitrage Sync:** Kích hoạt tại phút thứ 3 mỗi giờ.
-* **Lending Sync:** Kích hoạt tại phút thứ 7 mỗi giờ.
-* **Vault Sync:** Kích hoạt tại phút thứ 9 mỗi giờ.
-* **Exchange Metadata Sync:** Kích hoạt hàng ngày lúc 1:00 AM UTC.
+- The normal snapshot happens inside the delta sync.
+- The `:12` and `:42` guards repair a missing/partial slot if the sync was still running, the worker restarted, or the first pass was partial.
+- The daily `04:45 UTC` job repairs hours where a specific symbol was missed by the sync itself.
 
----
-
-## 3. Request Caching State Machine (Luồng phản hồi API cho UI)
-
-Hệ thống có 3 tầng cache (Frontend ISR, Backend Memory, Backend Redis) để tối ưu độ phản hồi dưới 100ms.
+## 4. Lending Sync Flow (hourly at `:07`)
 
 ```mermaid
-sequenceDiagram
-    participant U as User (Trình duyệt)
-    participant F as Frontend (Next.js)
-    participant N as Next.js ISR Cache
-    participant B as Backend (Express)
-    participant M as L1 Cache (Memory)
-    participant R as L2 Cache (Redis)
-    participant D as Database (MySQL)
-
-    U->>F: Truy cập trang (VD: /delta-neutral)
-    F->>N: Kiểm tra dữ liệu (next: {revalidate: 60})
-    
-    alt Có trong Next.js Cache & Còn hạn
-        N-->>F: Trả về dữ liệu (HIT)
-        F-->>U: Hiển thị ngay (0ms API delay)
-    else Hết hạn (Stale) hoặc Cache Miss
-        N->>B: Gửi HTTP GET /api/funding-extractor
-        
-        B->>M: Kiểm tra Memory Cache
-        alt Có trong L1 Memory
-            M-->>B: L1 Cache HIT (~0ms)
-        else Không có L1
-            B->>R: Kiểm tra Redis
-            alt Có trong L2 Redis
-                R-->>B: L2 Cache HIT (~5ms)
-                B->>M: Lưu lại vào L1 Memory
-            else Không có L2
-                B->>D: Truy vấn MySQL
-                D-->>B: Trả về kết quả
-                B->>R: Lưu L2 Redis (TTL 60s)
-                B->>M: Lưu L1 Memory (TTL 60s)
-            end
-        end
-        
-        B-->>N: Trả về JSON Response
-        N->>N: Lưu lại vào ISR Cache (Dùng cho 60s tới)
-        N-->>F: Lên UI
-        F-->>U: Nội dung cập nhật
-    end
+flowchart TD
+    A[DefiLlama pools] --> C[Filter and normalize pools]
+    B[DefiLlama protocols] --> D[Protocol URL and category map]
+    C --> E[Write lending_pools]
+    D --> E
+    D --> F[Upsert ref_links for lending protocols]
+    E --> G[Invalidate lending/ref-link caches]
 ```
 
-**Chiến lược tối ưu:**
-1. **Frontend không trực tiếp gọi API Backend per-request** nhờ cấu hình `next: { revalidate }`. Khách hàng thứ 1000 truy cập chung 1 phút sẽ nhận cùng 1 static HTML/JSON từ node server của Vercel/Next.js.
-2. **Backend MemCache (L1) ngăn chập tải Redis:** Nếu Frontend cache bị miss, API request đập vào BE, BE lập tức trả ra từ biến Map() Memory cực nhanh.
-3. **Redis (L2) chia sẻ liên server:** Nếu Backend có nhiều node hoặc Worker vừa chạy xong, kết quả tính toán có sẵn ở Redis chia cho mọi processes.
-
----
-
-## 4. Single Opportunity Lifecycle (Vòng đời của cơ hội Arbitrage/Funding)
-
-Máy trạng thái vòng đời của một kết quả cụ thể trong DB (ví dụ: Chênh lệch giá PURR).
+## 5. Vault Sync Flow (hourly at `:09`)
 
 ```mermaid
-stateDiagram-v2
-    [*] --> Discovered : Cron quét thấy cơ hội mới
-    
-    Discovered --> Active : Vượt mốc thanh khoản & lợi nhuận
-    
-    Active --> Fluctuation : APR/Spread thay đổi (Cập nhật liên tục 15p/lần)
-    Fluctuation --> Active : Cập nhật % Spread/Fee
-    
-    Active --> Unprofitable : Chênh lệch giá (Spread) quá lớn hoặc APR giảm
-    Unprofitable --> Drop : Bot gỡ khỏi bảng DB sau chu kỳ sync tiếp theo
-    
-    Active --> Persisted_History : Chuyển sang bảng _history khi chốt giờ (8H)
-    
-    Persisted_History --> Aggregated : Tổng hợp thành bản ghi trung bình (24h/7D/30D)
-    Aggregated --> [*]
-    Drop --> [*]
+flowchart TD
+    A[Dedicated vault fetchers] --> C[Normalize vault rows]
+    B[DefiLlama vault fetcher] --> C
+    C --> D[Filter low TVL rows]
+    D --> E[Write vaults]
+    E --> F[Upsert ref_links for vault protocols]
+    E --> G[Invalidate vault/ref-link caches]
 ```
 
-1. **Sinh trưởng:** Một cơ hội xuất hiện mỗi vòng Sync (Khoảng 15p).
-2. **Tuổi thọ thực (Active):** Thay đổi liên tục, "nhấp nháy" phần trăm lợi nhuận. Nếu đáp ứng tiêu chuẩn, được phơi lên UI.
-3. **Dập tắt (Drop):** Ở lần sweep tiếp theo, MySQL sẽ tiến hành `ON DUPLICATE KEY UPDATE` hoặc xóa/tạo lại nếu tỷ giá biến mất, cơ hội hết vòng đời.
-4. **Di sản (History):** Tại mốc chẵn giờ, nó được đưa vào `_history` để sau này phục vụ các tính toán chu kỳ dài.
+Vault fetchers currently registered: Hyperliquid, Jupiter, Paradex, Extended, Lighter, GRVT, Reya, Ostium, Bluefin, KiloEx, DefiLlama, RiseX, ApeX, EdgeX.
+
+## 6. Arbitrage Query Flow
+
+```mermaid
+flowchart TD
+    A[GET /api/arbitrage/opportunities] --> B[Active cycle snapshot in RAM]
+    B --> C[Query cache key: cycle + normalized params]
+    C -->|hit| D[Return paged response]
+    C -->|miss| E[Filter by mode, venues, anchors, ticker, IDs, numbers]
+    E --> F[Sort with missing metrics last]
+    F --> G[Paginate]
+    G --> H[Cache for the current cycle]
+    H --> D
+```
+
+Important properties:
+
+- The query key includes the cycle timestamp, so a new snapshot invalidates old query results logically.
+- Concurrent cache misses are coalesced to avoid re-sorting the same large snapshot in every request.
+- The watchlist-only view sends `ids`; an empty watchlist sends `__NONE__` so it returns zero rows instead of the full set.
+
+## 7. Guide Exchange Flow
+
+```mermaid
+flowchart TD
+    A[Curated frontend exchange lists] --> C[Render guide cards]
+    B[/api/home/exchange-ref-links] --> D[Override curated ref links by slug]
+    D --> C
+```
+
+This replaced the older exchange-directory cron-driven flow. Curated order and copy live in `frontend/lib/exchanges.ts`.
+
+## 8. Cache and Invalidation Flow
+
+```mermaid
+flowchart TD
+    A[API request] --> B{Redis connected?}
+    B -->|yes| C[Read Redis]
+    B -->|no| D[Read process memory]
+    C -->|hit| E[Return]
+    C -->|miss| F[Query DB / compute]
+    F --> G[Write Redis]
+    G --> E
+    D -->|hit| E
+    D -->|miss| F
+```
+
+- Redis is authoritative while connected. Process memory is only used when Redis is unavailable or a write failed.
+- Sync completions invalidate cache prefix groups (`delta`, `lending`, `vaults`) instead of waiting for TTL expiry.
+- Main TTLs: funding extractor/cross and lending/vaults `70 min`; arbitrage query cache `5 min`; scanner snapshot kept for `24 h` to survive restarts; airdrops/exchange list `12 h`.
+
+## 9. Retention and Backup Flow (daily)
+
+```mermaid
+flowchart TD
+    A[02:30 UTC backup] --> B[Write DB dump to BACKUP_DIR]
+    C[03:30 UTC retention] --> D[Prune history/snapshots]
+    D --> E[funding history: DATA_RETENTION_YEARS, default 2y]
+    D --> F[cross snapshots/summaries: 180d]
+    G[04:45 UTC self-heal] --> H[Repair last 48h]
+```
+
+- Retention runs under a Redis lock so a manual `pnpm db:cleanup` does not overlap the cron run.
+- PM2 restarts the cron worker at `05:30 UTC`, after backup, retention and self-heal have had time to finish.
