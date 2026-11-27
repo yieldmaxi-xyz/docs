@@ -1,49 +1,35 @@
-# Crypto Yield Maxi Docs
+# Yield Maxi
 
-This folder keeps the durable project documentation for the current app in this repository.
+**Compare crypto yields across exchanges and see what sits behind the headline APR.**
 
-## Core Docs
+Two exchanges can quote different funding rates for the same perpetual contract. That difference might disappear after fees, reverse over a week, or come from a market with very little liquidity. Yield Maxi brings prices, funding, trading costs, and market history together so you can check those trade-offs on one dashboard.
 
-- [architecture.md](architecture.md): backend/frontend structure, data flow, active cron jobs, tables
-- [api.md](api.md): current public API surface and response shapes
-- [deployment.md](deployment.md): production deployment notes, env vars, migrations
-- [frontend-pages.md](frontend-pages.md): current routes and important UX behavior
-- [exchanges.md](exchanges.md): active exchange coverage and curated guide lists
-- [exchange-symbol-mapping.md](exchange-symbol-mapping.md): symbol canonicalization and cross-venue matching
-- [filters.md](filters.md): centralized and environment-driven filtering thresholds
-- [state-machines.md](state-machines.md): sync, cache, retention and recovery flows
-- [STRING_UTILS.md](STRING_UTILS.md): string normalization helper behavior
+[Open Yield Maxi](https://yieldmaxi.xyz/) · [See screenshots and column definitions](dashboard-guide.md)
 
-## Current Product Shape
+## Start with one market
 
-The app currently ships these major surfaces:
+1. Open Arbitrage, search for `BTC` or `ETH`, and pick a row. Each row identifies the long and short venues for that asset. [Open Arbitrage](https://yieldmaxi.xyz/arbitrage)
+2. Compare **Est. Fees**, **Volume**, and **Open Interest** alongside **Net APR**. Open the calculator beside Net APR to see how the estimate changes with your position size and holding period.
+3. Select **Tracking** on the row. Switch between **24H**, **3D**, and **7D** to see whether the two markets moved together, whether their quoted funding diverged, and which payments settled where history is available. [Open Spread Tracking](https://yieldmaxi.xyz/tools/spread-tracking)
 
-- `/`: landing page with product overview and a static `380+` exchange stat
-- `/delta-neutral`: funding extraction opportunities, same-exchange and cross-exchange modes
-- `/arbitrage`: two-leg scanner (Price / Funding modes) with server-side filter/sort/pagination
-- `/lending`: lending pools grouped by asset
-- `/vaults`: vault opportunities with notice modal and APR history chart
-- `/airdrop`: curated airdrop opportunities from the database
-- `/guide`: educational guide + curated exchange directory
-- `/about`: project/about/support page
-- `/trending`: placeholder screen
-- `/health`: frontend route handler returning the deployed component and release SHA (not a UI page)
+![Spread Tracking price chart for BTC on Hyperliquid and RiseX with a gap in one of the two lines](images/spread-tracking-btc.jpg)
 
-## Active Sync Jobs
+*In this 24H BTC example, both venues have price observations for 67% of the window. One line continues during part of the gap, so the price difference can only be compared where the lines overlap.*
 
-The cron worker (`backend/src/cron/index.ts`) runs:
+## Find the right view
 
-- Arbitrage scanner every 5 minutes
-- Delta-neutral funding extraction every hour at `:03`
-- Lending pools every hour at `:07`
-- Vaults every hour at `:09`
-- Hourly history snapshot guards at `:12` and `:42`
-- Telegram reports at `:10` (top opportunities) and `:15` (hourly summary)
-- Daily backup at `02:30 UTC`, retention cleanup at `03:30 UTC`, history self-heal at `04:45 UTC`
+| If you want to know… | Start here |
+| --- | --- |
+| How do price and funding differ for the same asset across exchanges? | **Arbitrage** compares perpetual pairs, estimated fees, liquidity, and break-even time. [Arbitrage columns](dashboard-guide.md#arbitrage) |
+| Has that difference persisted? | **Spread Tracking** compares both legs on a shared timeline, with separate charts for price, quoted funding, and settled payments. [Read the charts](dashboard-guide.md#spread-tracking) |
+| How does a spot position paired with a short perp compare across venues? | **Delta Neutral** shows same-exchange and cross-exchange routes, their estimated Net APR, and historical coverage. [Delta Neutral columns](dashboard-guide.md#delta-neutral) |
+| How do exchanges compare by activity and trading costs? | **Stats** shows volume, open interest, and fee comparisons alongside market sentiment and stablecoin trends. [Stats and Exchanges](dashboard-guide.md#stats) |
+| Where can I compare lending markets or strategy vaults? | **Lending** and **Vaults** show rates and available liquidity information by market or product. [Lending columns](dashboard-guide.md#lending) · [Vault columns](dashboard-guide.md#vaults) |
+| What does an incentive campaign require? | **Airdrop** summarizes participation, timelines, and estimated potential for listed campaigns. [Airdrop cards](dashboard-guide.md#airdrop) |
+| Can I follow several price charts together? | **Chart** displays multiple symbols in one workspace. [Chart controls](dashboard-guide.md#chart) |
 
-There is no exchange-directory cron. `/api/exchanges` is built from the live client registry, while the guide page uses curated frontend data plus `ref_links` overrides.
+## What goes in and what you get
 
-## Notes
+Yield Maxi uses market-level prices, funding rates and payments, trading volume, open interest, and fees, along with published information about lending markets, vaults, and incentive programs. The dashboard presents comparison tables, yield and cost estimates, and historical charts.
 
-- Temporary audit reports and one-off checklists are intentionally not kept here once the resulting fixes are merged.
-- Backend-only operational notes may also live under `backend/docs/`; frontend deployment/CI notes live under `frontend/docs/`.
+Coverage varies by asset, venue, and period. A high Net APR describes an estimate under the displayed assumptions. Check the period and coverage alongside it, especially when comparing short and long windows. [How to interpret the numbers](dashboard-guide.md#read-the-numbers)
