@@ -12,9 +12,9 @@ Two exchanges can quote different funding rates for the same perpetual contract.
 2. Compare **Est. Fees**, **Volume**, and **Open Interest** alongside **Net APR**. Open the calculator beside Net APR to see how the estimate changes with your position size and holding period.
 3. Select **Tracking** on the row. Switch between **24H**, **3D**, and **7D** to see whether the two markets moved together, whether their quoted funding diverged, and which payments settled where history is available. [Open Spread Tracking](https://yieldmaxi.xyz/tools/spread-tracking)
 
-![Spread Tracking price chart for BTC on Hyperliquid and RiseX with a gap in one of the two lines](images/spread-tracking-btc.jpg)
+![Spread Tracking price chart for BTC on Hyperliquid and RiseX in dark mode](images/spread-tracking-btc.png)
 
-*In this 24H BTC example, both venues have price observations for 67% of the window. One line continues during part of the gap, so the price difference can only be compared where the lines overlap.*
+*Compare BTC prices on Hyperliquid and RiseX over the same 24H window. Shared coverage indicates how much of that window has observations from both venues. Open the image to inspect the chart at full resolution.*
 
 ## Find the right view
 

@@ -6,7 +6,7 @@ Start with a question about a market. The tables help you find a pair, the calcu
 
 ## Arbitrage
 
-![Arbitrage table comparing long and short perpetual contracts across venues](images/arbitrage.jpg)
+![Arbitrage table comparing long and short perpetual contracts across venues](images/arbitrage.png)
 
 **Price** mode is a starting point for comparing entry prices. **Funding** mode is a starting point for comparing recurring funding. Choose **Columns → All columns** to display the full table.
 
@@ -18,7 +18,7 @@ Start with a question about a market. The tables help you find a pair, the calcu
 | **Prices** | The displayed ask for entering the long and bid for entering the short. |
 | **Price Arb** | The entry price difference, shown as a percentage and as a price difference per unit. A positive value means the short bid is above the long ask. |
 | **Funding** | The current funding rate for each leg. Check each contract's funding interval when comparing rates. |
-| **Funding Arb 1H** | The short leg's one-hour funding rate minus the long leg's, where comparable hourly data is available. |
+| **Funding Arb 1H** | The current short-leg funding rate minus the long-leg rate, expressed per hour. An **≈** marks a conversion from a different funding interval. |
 | **Funding Arb 24H** | The cumulative difference in settled funding for the two legs over the past day, when both histories support it. |
 | **Funding Arb 7D** | The cumulative difference in settled funding over the past seven days, when both histories support it. |
 | **Est. Fees** | Estimated trading fees for opening and closing both legs at the table's reference position size. |
@@ -36,29 +36,29 @@ Open **Arbitrage** and choose **Funding**. Search for an asset and read each row
 
 Suppose a pair shows **+0.08% Funding Arb over 24H** and **−0.12% over 7D**. Those illustrative numbers say that the latest day favored the displayed direction while the full week went the other way. Open the 7D charts to see when funding changed and whether both venues have enough history to compare. Then use the calculator to compare estimated fees and projected return at your intended holding period.
 
-![Arbitrage calculator showing capital and holding period inputs and estimated net profit, APR, and ROI](images/profit-calculator.jpg)
+![Arbitrage calculator showing capital and holding period inputs and estimated net profit, APR, and ROI](images/profit-calculator.png)
 
 **Net Profit** is the estimated dollar result for the selected hold. **Net ROI** expresses that result as a percentage of the entered capital. **Net APR** expresses it on an annualized basis. The breakdown shows the estimated trading fees and price basis separately.
 
 ## Spread Tracking
 
-![BTC price comparison on Hyperliquid and RiseX with a visible gap in one venue's history](images/spread-tracking-btc.jpg)
+![BTC price comparison on Hyperliquid and RiseX in dark mode](images/spread-tracking-btc.png)
 
 | Chart | What to look for |
 | --- | --- |
 | **Price Arbitrage** | Compare the two price lines. Look for when the price gap widened or narrowed across the two venues. |
 | **Funding Arbitrage** | Compare quoted funding over time. Watch for brief spikes, sustained differences, and reversals. |
-| **Funding Payment History** | Inspect the rates that actually settled where available. Settlement timing can differ by venue, so compare timestamps as well as the size and sign of each payment. |
+| **Funding Payment History** | Read net settled funding for the displayed direction, calculated as short-leg funding minus long-leg funding. Positive bars favor that direction; negative bars work against it. A bucket needs observations from both legs. |
 
-Start with **24H** to inspect recent moves. Use **3D** or **7D** to see whether the pattern repeats. **Shared coverage** measures how much of the selected window has observations from both legs. In the example, one venue has a gap while the other still has observations. [Open Spread Tracking](https://yieldmaxi.xyz/tools/spread-tracking)
+Start with **24H** to inspect recent moves. Use **3D** or **7D** to see whether the pattern repeats. **Shared coverage** measures how much of the selected window has observations from both legs. A line can connect observations across a missing interval, so a continuous line alone does not mean coverage is complete. [Open Spread Tracking](https://yieldmaxi.xyz/tools/spread-tracking)
 
-![Funding chart showing the two BTC venues' quoted rates over 24 hours](images/spread-tracking-funding.jpg)
+![Funding chart showing the two BTC venues' quoted rates over 24 hours](images/spread-tracking-funding.png)
 
 *Funding Arbitrage shows when the venues quoted different rates during the day.*
 
-![Grouped red and green bars for settled hourly funding rates on the two BTC venues](images/spread-tracking-payments.jpg)
+![Green and red bars showing net settled funding for the BTC long and short legs](images/spread-tracking-payments.png)
 
-*Funding Payment History shows the sign and size of settled rates by time bucket.*
+*Funding Payment History shows net settled funding by time bucket. Green bars are positive, red bars are negative. Hover a bar to inspect both legs and the net value.*
 
 ## Delta Neutral
 
@@ -66,7 +66,7 @@ In **Delta Neutral**, choose **Same-Exchange** to see spot and perp legs on one 
 
 ### Same-Exchange
 
-![Same-Exchange Delta Neutral table with asset, coverage, and Net APR columns](images/delta-same.jpg)
+![Same-Exchange Delta Neutral table with asset, coverage, and Net APR columns](images/delta-same.png)
 
 | Column | What it tells you |
 | --- | --- |
@@ -86,7 +86,7 @@ In **Delta Neutral**, choose **Same-Exchange** to see spot and perp legs on one 
 
 ### Cross-Exchange
 
-![Cross-Exchange Delta Neutral table with separate spot and perpetual venues](images/delta-cross.jpg)
+![Cross-Exchange Delta Neutral table with separate spot and perpetual venues](images/delta-cross.png)
 
 | Column | What it tells you |
 | --- | --- |
@@ -107,17 +107,17 @@ In **Delta Neutral**, choose **Same-Exchange** to see spot and perp legs on one 
 
 ## Stats
 
-![Market Overview with a fear and greed gauge, historical readings, and a sentiment chart](images/market-overview.jpg)
+![Market Overview with a fear and greed gauge, historical readings, and a sentiment chart](images/market-overview.png)
 
 **Market Sentiment** places the latest Fear & Greed score alongside recent readings and a historical chart. The scale runs from 0 (extreme fear) to 100 (extreme greed).
 
-![Stablecoin Liquidity charts comparing market capitalization for USDT and USDC](images/stablecoin-liquidity.jpg)
+![Stablecoin Liquidity charts comparing market capitalization for USDT and USDC](images/stablecoin-liquidity.png)
 
 **Stablecoin Liquidity** tracks stablecoin market capitalization and **USDT Dominance**, the share of the overall crypto market capitalization represented by USDT. Use longer windows to put a daily change in context. [Open Stats](https://yieldmaxi.xyz/market) · [USDT Dominance](https://www.tradingview.com/symbols/USDT.D/)
 
 ### Exchanges
 
-![Exchanges table with volume, open interest, fees, and execution cost estimates at three order sizes](images/exchanges.jpg)
+![Exchanges table with volume, open interest, fees, and execution cost estimates at three order sizes](images/exchanges.png)
 
 | Column | What it tells you |
 | --- | --- |
@@ -136,7 +136,7 @@ Check the estimate's tooltip for its cost basis. Compare the same reference cont
 
 ## Lending
 
-![Lending table comparing assets, chains, pool size, and base and reward APY](images/lending.jpg)
+![Lending table comparing assets, chains, pool size, and base and reward APY](images/lending.png)
 
 Compare pools for the same asset across chains. A pool can have a higher **Total APY** because of temporary incentives, so read **Base APY**, **Reward APY**, and **APY (30D avg)** together. [Open Lending](https://yieldmaxi.xyz/lending)
 
@@ -155,7 +155,7 @@ Compare pools for the same asset across chains. A pool can have a higher **Total
 
 ## Vaults
 
-![Vaults table showing deposit limits, lockup, APY, and notices](images/vaults.jpg)
+![Vaults table showing deposit limits, lockup, APY, and notices](images/vaults.png)
 
 Start with the deposit asset and lockup period, then use **Notice** to see how the vault works and what can affect the return. [Open Vaults](https://yieldmaxi.xyz/vaults)
 
@@ -174,7 +174,7 @@ Start with the deposit asset and lockup period, then use **Notice** to see how t
 
 ## Airdrop
 
-![Airdrop program cards with potential ratings, earning instructions, and timelines](images/airdrop.jpg)
+![Airdrop program cards with potential ratings, earning instructions, and timelines](images/airdrop.png)
 
 Use the category filters to switch between perpetual DEX, HIP3 Ecosystem, and DeFi Protocol programs. Each card summarizes what participants can do and the details available for the program. [Open Airdrop](https://yieldmaxi.xyz/airdrop)
 
@@ -189,7 +189,7 @@ Use the category filters to switch between perpetual DEX, HIP3 Ecosystem, and De
 
 ## Chart
 
-![Chart workspace displaying multiple symbol panels in one layout](images/chart.jpg)
+![Chart workspace displaying multiple symbol panels in one layout](images/chart.png)
 
 Use the separate **Chart** workspace for side-by-side price analysis. Choose a **Layout** for the number of panels you want and set the **Symbol** in each panel. Your layout is saved in the current browser. For funding quotes or settlement history for a specific pair, use Spread Tracking. [Open Chart](https://yieldmaxi.xyz/tools/chart)
 
